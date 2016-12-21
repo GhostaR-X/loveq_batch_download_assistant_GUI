@@ -17,10 +17,10 @@ for root, dirs, files in os.walk('.'):
             #file.rsplit('.',1) 即 把file字符串从右向左处理，以'.'为分隔符，只分割一次(如file=loveq.ui，那么变成了['loveq','ui'])，
             #file.rsplit('.',1)[0] 即只取文件名(loveq)，不要后缀(ui)
             print("Convert %s to %s_ui.py Finish!" %(file,file.rsplit('.',1)[0]))
-            exit()
+            #exit()
         elif os.path.splitext( file )[1] == '.qrc': 
             os.system('pyrcc5.exe -o %s_rc.py %s' %(file.rsplit('.',1)[0],file)) 
             print("Convert %s to %s_rc.py Finish!" %(file,file.rsplit('.',1)[0]))
-            exit()
+            #exit()
         
-    print("Can't Find .ui/.qrc file!")       
+    #print("Can't Find .ui/.qrc file!")       

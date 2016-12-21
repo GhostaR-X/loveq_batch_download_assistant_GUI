@@ -4,13 +4,14 @@
 import sys
 import os
 from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QMessageBox, QProgressBar, QLabel
-#from PyQt5 import QtGui
 from loveq_ui import Ui_LoveQ_Download_Assistant
 from datetime import datetime
 import urllib.request
 import time
 
 from PyQt5.QtCore import QThread, pyqtSignal, QDate 
+from PyQt5.QtGui import QIcon
+import loveq_rc
 
 class LOVEQ_MAIN( QWidget ):
     def __init__( self ):
@@ -27,11 +28,15 @@ class LOVEQ_MAIN( QWidget ):
 
         #----初始化GUI界面----
         super(LOVEQ_MAIN,self).__init__()         #用LOVEQ_MAIN父类的__init__函数QWidget.__init__()来初始化LOVEQ_MAIN的对象
-        self.ui = Ui_LoveQ_Download_Assistant()  
+        self.ui = Ui_LoveQ_Download_Assistant()       
         self.ui.setupUi( self )                   #导入loveq.ui生成的loveq_ui.py的界面
+
+        #modify window title
+        self.setWindowTitle("LoveQ_Batch_Download_Assistant     By GhostaR@163.com")     #手动修改窗口标题
 
         #init icon
         #self.setWindowIcon(QIcon('Assistant.ico'))  
+        self.setWindowIcon(QIcon(':icon/Assistant.ico')) 
 
         #init child controls' status
         #--time--
@@ -70,7 +75,7 @@ class LOVEQ_MAIN( QWidget ):
         task_label_num = "task_label_" + str( task_num ) 
         self.task_label_dict[task_label_num] = QLabel( self )
 
-        self.task_label_dict[task_label_num].setGeometry(10, 242 + task_num * 25, 500, 25)
+        self.task_label_dict[task_label_num].setGeometry(10, 158 + task_num * 25, 500, 25)
 
         self.task_label_dict[task_label_num].setObjectName("task_label")
         self.task_label_dict[task_label_num].setText("Downloading %s " %(url))
@@ -84,7 +89,7 @@ class LOVEQ_MAIN( QWidget ):
 
         task_progress_num = "task_progress_" + str( task_num )
         self.task_progress_dict[task_progress_num] = QProgressBar(self)
-        self.task_progress_dict[task_progress_num].setGeometry(460, 249 + task_num * 25, 200, 10)
+        self.task_progress_dict[task_progress_num].setGeometry(460, 165 + task_num * 25, 200, 10)
 
         self.task_progress_dict[task_progress_num].setValue(0) 
         self.task_progress_dict[task_progress_num].show() 
@@ -97,6 +102,10 @@ class LOVEQ_MAIN( QWidget ):
         self.downloadThread.dlSignal_Finish.connect( self.slot_FinishDownload )
         self.downloadThread.start()
 
+        self.ui.saveDirBtn.setEnabled(False)                   #让按键无效直到任务结束 
+        self.ui.downloadBtn.setEnabled(False)
+        self.ui.statusLabel.setText("Downloading...")
+
     def slot_RefreshProgress( self, progressbar , percent ):
         self.task_progress_dict[progressbar].setValue( percent ) 
 
@@ -107,24 +116,25 @@ class LOVEQ_MAIN( QWidget ):
 
         self.task_label_dict[label_num].hide()
         self.task_progress_dict[task_progress_num].hide() 
-        self.TaskThread.release_task( task_num )     
+        self.TaskThread.release_task( task_num )  
+
+        self.ui.saveDirBtn.setEnabled(True)                    #任务结束，让按键重新可用
+        self.ui.downloadBtn.setEnabled(True)
+        self.ui.statusLabel.setText("Task Finish!")
         
 
     def slot_StartTask( self ):
         self.save_dir = self.ui.saveDirEdit.text()             #更新保存路径
-        #print("save_dir=",self.save_dir)  
-
         self.start_date = self.ui.startDateEdit.date()         #更新起始日期  date() = 获取Start_dateEdit的日期信息 
-        #print("start_date=",self.start_date)
-
         self.end_date = self.ui.endDateEdit.date()             #更新结束日期 
-        #print("end_date=",self.end_date)
 
+        #创建任务子进程
         self.TaskThread = TaskThread( self.save_dir, self.start_date, self.end_date )
         self.TaskThread.tskSignal_Warning.connect( self.slot_ShowWarningMessage )
         self.TaskThread.tskSignal_CreateLabel.connect( self.slot_CreateLabel )
         self.TaskThread.tskSignal_CreateProgress.connect( self.slot_CreateProgress )
         self.TaskThread.tskSignal_CreateDownloadTask.connect( self.slot_CreateDownloadTask )
+        
         self.TaskThread.start()
 
 
@@ -161,14 +171,12 @@ class TaskThread( QThread ):
 
     def get_target_url( self, date ):  
         str_date = date.toString("yyyy-MM-dd")    
-        #print(str_date)
         target_url = self.base_url + "LoveQ.cn_" + str_date + "-1.mp3"
         return target_url
 
     def get_save_filename( self, date ):
         str_date = date.toString("yyyy-MM-dd")  
         filename = self.save_dir + '/' + str_date + "-LoveQ.mp3"
-        #print(filename)
         return filename
 
     #获取有效任务号
@@ -176,9 +184,7 @@ class TaskThread( QThread ):
         for idx,val in enumerate( self.task_valid_num_table ):
             if val == True:
                 self.task_valid_num_table[idx] = False  #set unvalid
-                #print( idx )
                 return idx
-            #print( idx,val )
         return -1
 
     #释放有效任务号
@@ -234,7 +240,6 @@ class TaskThread( QThread ):
        
         while True:     #simulate  do...while    self.end_date > self.start_date  
             if self.is_available_date( self.start_date ) == False:   
-                #print('unavailable')
                 self.start_date = QDate.fromJulianDay( self.start_date.toJulianDay() + 1 )   
 
                 if self.start_date > self.end_date or self.start_date >= self.today_date or self.start_date < self.loveq_launch_date :
@@ -244,7 +249,6 @@ class TaskThread( QThread ):
             else :
                 target_url = self.get_target_url( self.start_date )
                 save_file = self.get_save_filename( self.start_date )
-                #print(target_url)
                 task_num = self.create_task( target_url, save_file )
                 if task_num == -1:
                     time.sleep(5) 
@@ -252,10 +256,6 @@ class TaskThread( QThread ):
                     continue
 
                 try :                    
-                    #urllib.request.urlretrieve( target_url, save_file, self.cbfunc_progress ) 
-                    #self.downloadThread = DownloadThread( target_url, save_file, task_num )
-                    #self.downloadThread.dlSignal_Finish.connect( self.slot_FinishDownlaod )
-                    #self.downloadThread.start()
                     self.tskSignal_CreateDownloadTask.emit( target_url, save_file, task_num )
 
                 except urllib.request.HTTPError as e :
@@ -295,7 +295,6 @@ class DownloadThread( QThread ):
 
     def cbfunc_progress( self, blocknum, blocksize, totalsize ) :  #callbackfunc_progress
         percent = 100 * blocknum * blocksize / totalsize
-        #loveq.ui.downloadProgressBar.setValue(percent) 
         #print( "blocknum=",blocknum )
         #print( "%3d%%" %(percent),end='\r')
         if percent >= 100 :
@@ -303,8 +302,6 @@ class DownloadThread( QThread ):
             #print("")   #change line
             self.dlSignal_Finish.emit( self.task_num, self.target_url )
 
-        #loveq.ui.downloadProgressBar.setValue(percent) 
-        #loveq.task_progress_dict[self.progressbar_num].setValue( percent ) 
         self.dlSignal_RefreshProgress.emit( self.progressbar_num ,percent )  
 
 if __name__=="__main__":   
